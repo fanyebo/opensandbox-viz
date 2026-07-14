@@ -173,9 +173,8 @@ def show_detail(sid):
         if st.button("📋 列出进程", key=f"ps_{sid}"):
             out = _cmd_exec(sid, 44772, "ps aux --sort=-%cpu | head -20")
             st.code(out or "无进程数据", language="bash")
-        c1,c2 = st.columns(2)
-        kill_pid = c1.text_input("PID", key=f"kp_{sid}")
-        if c2.button("💀 Kill", key=f"kill_{sid}") and kill_pid:
+        kill_pid = st.text_input("PID", key=f"kp_{sid}")
+        if st.button("💀 Kill", key=f"kill_{sid}") and kill_pid:
             rk = execd(sid, 44772, "POST", "/command", json={"command": f"kill -9 {kill_pid}"})
             if rk.status_code == 200: st.toast(f"Sent SIGKILL to {kill_pid}")
             else: st.error(rk.text[:200])
