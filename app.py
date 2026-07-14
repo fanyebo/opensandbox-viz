@@ -227,19 +227,16 @@ if page == "📋 总览":
         if st.button("➕ 创建 Sandbox", use_container_width=True): st.session_state.subpage = "create"; st.rerun()
         if not sandboxes: st.info("暂无 sandbox")
         else:
-            cols = st.columns([2,2,2,1,1,1])
-            for h,c in zip(["ID","状态","镜像","CPU","内存","操作"],cols): c.caption(f"**{h}**")
+            cols = st.columns([3,2,2,1])
+            for h,c in zip(["ID","状态","镜像","操作"],cols): c.caption(f"**{h}**")
             for s in sandboxes:
                 sid = _id(s); state = _state(s)
                 emoji = {"Running":"🟢","Pending":"🟡","Paused":"⏸️","Terminated":"⚫","Failed":"🔴"}.get(state,"❓")
-                rl = (s.get("resourceLimits") or {})
-                c1,c2,c3,c4,c5,c6 = st.columns([2,2,2,1,1,1])
+                c1,c2,c3,c4 = st.columns([3,2,2,1])
                 c1.write(sid[:12]+"...")
                 c2.write(f"{emoji} {state}")
                 c3.write(_img(s))
-                c4.write(rl.get("cpu","-"))
-                c5.write(rl.get("memory","-"))
-                if c6.button("🔍", key=f"dtl_{sid}"): st.session_state.subpage = f"detail:{sid}"; st.rerun()
+                if c4.button("🔍", key=f"dtl_{sid}"): st.session_state.subpage = f"detail:{sid}"; st.rerun()
             # ponytail: pagination
             total = pagination.get("totalItems", len(sandboxes))
             total_pages = pagination.get("totalPages", 1)
