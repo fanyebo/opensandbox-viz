@@ -56,7 +56,7 @@ def _cmd_exec(sid, port, cmd):
         if not line: continue
         try:
             ev = __import__("json").loads(line)
-            if ev.get("type") == "stdout": text += ev.get("text", "")
+            if ev.get("type") == "stdout": text += ev.get("text", "") + "\n"
         except: pass
     return text
 
