@@ -15,8 +15,8 @@ def _save_config():
         json.dump({"osb_base": _base(), "osb_key": _key(), "osb_proxy": st.session_state.osb_proxy}, f)
 
 cfg = _load_config()
-KEY = os.getenv("OSB_API_KEY", cfg.get("osb_key", "dev-api-key-change-in-production"))
-BASE = os.getenv("OSB_API_BASE", cfg.get("osb_base", "http://localhost:8080/v1"))
+KEY = cfg.get("osb_key") or os.getenv("OSB_API_KEY") or "dev-api-key-change-in-production"
+BASE = cfg.get("osb_base") or os.getenv("OSB_API_BASE") or "http://localhost:8080/v1"
 
 if "osb_key" not in st.session_state: st.session_state.osb_key = KEY
 if "osb_base" not in st.session_state: st.session_state.osb_base = BASE
