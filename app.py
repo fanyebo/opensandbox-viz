@@ -278,9 +278,13 @@ if page == "📋 总览":
 
 elif page == "⚙️ 配置":
     st.header("配置")
-    st.text_input("API Base", key="osb_base", on_change=_save_config)
-    st.text_input("API Key", key="osb_key", type="password", on_change=_save_config)
-    st.checkbox("使用代理", key="osb_proxy", on_change=_save_config)
+    # ponytail: refresh from disk on every visit
+    loaded = _load_config()
+    if loaded: st.session_state.update({k: v for k, v in loaded.items() if k in ("osb_base", "osb_key", "osb_proxy")})
+    st.text_input("API Base", key="osb_base")
+    st.text_input("API Key", key="osb_key", type="password")
+    st.checkbox("使用代理", key="osb_proxy")
+    _save_config()  # ponytail: save on every render, simpler than on_change
     st.caption("配置持久化到 ~/.opensandbox-viz.json，重启不丢")
     if st.button("🔄 恢复默认"):
         st.session_state.osb_base = BASE
