@@ -1,5 +1,5 @@
 """OpenSandbox Dashboard"""
-import streamlit as st, httpx, os, time
+import streamlit as st, httpx, os, time, base64
 
 st.set_page_config(page_title="OpenSandbox Viz", page_icon="📦", layout="wide")
 
@@ -128,8 +128,11 @@ def show_detail(sid):
                         if st.button(f"{'📁' if is_dir else '📄'} {nm}", key=f"nv_{sid}_{epath}"):
                             if is_dir: st.session_state[ck] = epath; st.rerun()
                             else:
-                                txt = _cmd_exec(sid, 44772, f"cat {epath}")
-                                st.session_state[f"fct_{sid}"] = txt or ""
+                                txt = _cmd_exec(sid, 44772, f"base64 < {epath}")
+                                # ponytail: base64 decode for binary safety
+                                try: txt = base64.b64decode(txt.replace("\n","").replace("\r","")).decode(errors="replace") if txt else ""
+                                except: txt = txt or ""
+                                st.session_state[f"fct_{sid}"] = txt
                                 st.session_state[f"fpt_{sid}"] = epath; st.rerun()
                     with c2:
                         if not is_dir and st.button("🗑️", key=f"dl_{sid}_{epath}"):
@@ -140,8 +143,9 @@ def show_detail(sid):
                     cnt = st.text_area("内容", value=st.session_state.get(f"fct_{sid}",""), height=300, key=f"ed_{sid}")
                     c1,c2 = st.columns(2)
                     if c1.button("💾 保存", key=f"sv_{sid}"):
-                        safe = cnt.replace("'", "'\\''").replace("`", "\\`")
-                        execd(sid,44772,"POST","/command",json={"command": f"cat > {fp} << 'EOF'\n{safe}\nEOF"})
+                        # ponytail: base64 encode for binary safety
+                        b64 = base64.b64encode(cnt.encode()).decode()
+                        execd(sid,44772,"POST","/command",json={"command": f"echo '{b64}' | base64 -d > {fp}"})
                         st.session_state[f"fct_{sid}"] = cnt; st.toast("saved"); st.rerun()
                     if c2.button("❌ 关闭", key=f"cl_{sid}"):
                         del st.session_state[f"fpt_{sid}"]; del st.session_state[f"fct_{sid}"]; st.rerun()
