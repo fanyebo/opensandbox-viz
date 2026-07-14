@@ -1,5 +1,5 @@
 """OpenSandbox Dashboard"""
-import streamlit as st, httpx, os
+import streamlit as st, httpx, os, time
 
 st.set_page_config(page_title="OpenSandbox Viz", page_icon="📦", layout="wide")
 
@@ -10,6 +10,9 @@ if "osb_key" not in st.session_state: st.session_state.osb_key = KEY
 if "osb_base" not in st.session_state: st.session_state.osb_base = BASE
 if "osb_proxy" not in st.session_state: st.session_state.osb_proxy = False
 if "subpage" not in st.session_state: st.session_state.subpage = None
+# ponytail: pagination state
+if "sb_page" not in st.session_state: st.session_state.sb_page = 1
+if "sb_size" not in st.session_state: st.session_state.sb_size = 20
 
 def _key(): return st.session_state.osb_key
 def _base(): return st.session_state.osb_base.rstrip("/")
@@ -30,11 +33,14 @@ def execd(sid, port, method, path, **kw):
     if not base.startswith("http"): base = f"http://{base}"
     return _client.request(method, f"{base.rstrip('/')}{path}", headers=h, **kw)
 
-def fetch():
-    r = api("/sandboxes")
-    if r.status_code == 200:
-        d = r.json(); return d if isinstance(d, list) else d.get("items", [])
-    return []
+def fetch(page=1, size=20):
+    """Return (items, pagination_dict)."""
+    r = api(f"/sandboxes?page={page}&pageSize={size}")
+    if r.status_code != 200: return [], {}
+    d = r.json()
+    items = d if isinstance(d, list) else d.get("items", [])
+    pg = {} if isinstance(d, list) else d.get("pagination", {})
+    return items, pg
 
 def _id(s): return s.get("sandboxId") or s.get("id", "?")
 def _state(s): return (s.get("status") or {}).get("state", "?")
@@ -57,9 +63,9 @@ def _cmd_exec(sid, port, cmd):
 # sidebar
 page = st.sidebar.radio("导航", ["📋 总览", "⚙️ 配置"], label_visibility="collapsed")
 if "page_prev" not in st.session_state: st.session_state.page_prev = page
-if page != st.session_state.page_prev: st.session_state.subpage = None  # ponytail: clear subpage on sidebar nav
+if page != st.session_state.page_prev: st.session_state.subpage = None
 st.session_state.page_prev = page
-sandboxes = fetch()
+sandboxes, pagination = fetch(st.session_state.sb_page, st.session_state.sb_size)
 
 def show_detail(sid):
     r = api(f"/sandboxes/{sid}")
@@ -141,6 +147,28 @@ def show_detail(sid):
                         del st.session_state[f"fpt_{sid}"]; del st.session_state[f"fct_{sid}"]; st.rerun()
             else: st.json(entries)
         else: st.warning(f"list fail: {rl.text[:300]}")
+    # ponytail: snapshots
+    with st.expander("📸 快照"):
+        if st.button("📷 创建快照", key=f"snap_create_{sid}"):
+            r = api(f"/sandboxes/{sid}/snapshots", "POST")
+            if r.status_code in (200,201,202): st.toast("快照创建中...")
+            else: st.error(f"创建快照失败: {r.text[:300]}")
+        # list snapshots
+        sr = api("/snapshots")
+        if sr.status_code == 200:
+            snaps = sr.json() if isinstance(sr.json(), list) else sr.json().get("items", [])
+            for sn in snaps:
+                # ponytail: filter snapshots originated from this sandbox (best-effort)
+                sn_id = sn.get("originalSandboxId") or sn.get("sandboxId") or ""
+                if sn_id and sn_id != sid: continue
+                sn_full = sn.get("snapshotId") or sn.get("id", "?")
+                c1,c2 = st.columns([4,1])
+                c1.caption(f"{sn_full[:20]}... ({sn.get('status','?')})")
+                if c2.button("♻️ 恢复", key=f"snap_restore_{sn_full[:12]}"):
+                    r2 = api("/sandboxes", "POST", json={"snapshotId": sn_full})
+                    if r2.status_code in (200,201,202): st.toast("已从快照创建沙箱"); st.rerun()
+                    else: st.error(f"恢复失败: {r2.text[:200]}")
+        else: st.caption("无法获取快照列表")
     with st.expander("原始数据"): st.json(sb)
     with st.expander("诊断日志"):
         scope = st.text_input("Scope", key="log_scope")
@@ -175,11 +203,21 @@ if page == "📋 总览":
         cpu = c1.text_input("CPU", value="1")
         mem = c2.text_input("内存", value="512Mi")
         ep = st.text_input("Entrypoint", value="sleep infinity")
+        # ponytail: env vars
+        env_raw = st.text_area("环境变量", placeholder="KEY1=val1\nKEY2=val2", height=80)
         c3,c4 = st.columns(2)
         if c3.button("创建", type="primary"):
             body = {"image":{"uri":image},"timeout":timeout,"entrypoint":ep.split()}
             if st.session_state.osb_proxy: body["useProxy"] = True
             if cpu or mem: body["resourceLimits"] = {"cpu":cpu,"memory":mem}
+            # ponytail: parse env
+            if env_raw.strip():
+                env = {}
+                for line in env_raw.strip().split("\n"):
+                    if "=" in line:
+                        k, _, v = line.partition("=")
+                        env[k.strip()] = v.strip()
+                if env: body["env"] = env
             r = api("/sandboxes","POST",json=body)
             if r.status_code in (200,201,202): d=r.json(); st.success(f"OK {_id(d)}"); st.json(d)
             else: st.error(f"fail ({r.status_code}): {r.text}")
@@ -202,7 +240,16 @@ if page == "📋 总览":
                 c4.write(rl.get("cpu","-"))
                 c5.write(rl.get("memory","-"))
                 if c6.button("🔍", key=f"dtl_{sid}"): st.session_state.subpage = f"detail:{sid}"; st.rerun()
-            st.caption(f"共 {len(sandboxes)} 个")
+            # ponytail: pagination
+            total = pagination.get("totalItems", len(sandboxes))
+            total_pages = pagination.get("totalPages", 1)
+            st.caption(f"第 {st.session_state.sb_page}/{total_pages} 页 · 共 {total} 个")
+            pc1,pc2,pc3 = st.columns([1,2,1])
+            if pc1.button("← 上一页") and st.session_state.sb_page > 1:
+                st.session_state.sb_page -= 1; st.rerun()
+            pc2.write("")
+            if pc3.button("下一页 →") and st.session_state.sb_page < total_pages:
+                st.session_state.sb_page += 1; st.rerun()
 
 elif page == "⚙️ 配置":
     st.header("配置")
