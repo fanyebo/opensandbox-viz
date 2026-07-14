@@ -1,14 +1,26 @@
 """OpenSandbox Dashboard"""
-import streamlit as st, httpx, os, time, base64
+import streamlit as st, httpx, os, time, base64, json
 
 st.set_page_config(page_title="OpenSandbox Viz", page_icon="📦", layout="wide")
 
-KEY = os.getenv("OSB_API_KEY", "dev-api-key-change-in-production")
-BASE = os.getenv("OSB_API_BASE", "http://localhost:8080/v1")
+CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".opensandbox-viz.json")
+
+def _load_config():
+    try:
+        with open(CONFIG_FILE) as f: return json.load(f)
+    except: return {}
+
+def _save_config():
+    with open(CONFIG_FILE, "w") as f:
+        json.dump({"osb_base": _base(), "osb_key": _key(), "osb_proxy": st.session_state.osb_proxy}, f)
+
+cfg = _load_config()
+KEY = os.getenv("OSB_API_KEY", cfg.get("osb_key", "dev-api-key-change-in-production"))
+BASE = os.getenv("OSB_API_BASE", cfg.get("osb_base", "http://localhost:8080/v1"))
 
 if "osb_key" not in st.session_state: st.session_state.osb_key = KEY
 if "osb_base" not in st.session_state: st.session_state.osb_base = BASE
-if "osb_proxy" not in st.session_state: st.session_state.osb_proxy = False
+if "osb_proxy" not in st.session_state: st.session_state.osb_proxy = cfg.get("osb_proxy", False)
 if "subpage" not in st.session_state: st.session_state.subpage = None
 # ponytail: pagination state
 if "sb_page" not in st.session_state: st.session_state.sb_page = 1
@@ -266,11 +278,13 @@ if page == "📋 总览":
 
 elif page == "⚙️ 配置":
     st.header("配置")
-    st.text_input("API Base", key="osb_base", value=st.session_state.osb_base)
-    st.text_input("API Key", key="osb_key", value=st.session_state.osb_key, type="password")
-    st.checkbox("使用代理", key="osb_proxy", value=st.session_state.osb_proxy)
-    st.caption("无需重启，直接生效")
+    st.text_input("API Base", key="osb_base", on_change=_save_config)
+    st.text_input("API Key", key="osb_key", type="password", on_change=_save_config)
+    st.checkbox("使用代理", key="osb_proxy", on_change=_save_config)
+    st.caption("配置持久化到 ~/.opensandbox-viz.json，重启不丢")
     if st.button("🔄 恢复默认"):
         st.session_state.osb_base = BASE
         st.session_state.osb_key = KEY
+        st.session_state.osb_proxy = False
+        _save_config()
         st.rerun()
