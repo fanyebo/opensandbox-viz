@@ -27,7 +27,7 @@ if "sb_page" not in st.session_state: st.session_state.sb_page = 1
 if "sb_size" not in st.session_state: st.session_state.sb_size = 20
 
 def _key(): return st.session_state.osb_key
-def _base(): return st.session_state.osb_base.rstrip("/")
+def _base(): return (st.session_state.osb_base or BASE).rstrip("/")  # ponytail: guard empty config
 
 _client = httpx.Client(transport=httpx.HTTPTransport(retries=1), http1=True, http2=False, timeout=30)
 
