@@ -169,6 +169,16 @@ def show_detail(sid):
                     if r2.status_code in (200,201,202): st.toast("已从快照创建沙箱"); st.rerun()
                     else: st.error(f"恢复失败: {r2.text[:200]}")
         else: st.caption("无法获取快照列表")
+    with st.expander("🔧 进程管理"):
+        if st.button("📋 列出进程", key=f"ps_{sid}"):
+            out = _cmd_exec(sid, 44772, "ps aux --sort=-%cpu | head -20")
+            st.code(out or "无进程数据", language="bash")
+        c1,c2 = st.columns(2)
+        kill_pid = c1.text_input("PID", key=f"kp_{sid}")
+        if c2.button("💀 Kill", key=f"kill_{sid}") and kill_pid:
+            rk = execd(sid, 44772, "POST", "/command", json={"command": f"kill -9 {kill_pid}"})
+            if rk.status_code == 200: st.toast(f"Sent SIGKILL to {kill_pid}")
+            else: st.error(rk.text[:200])
     with st.expander("原始数据"): st.json(sb)
     with st.expander("诊断日志"):
         scope = st.text_input("Scope", key="log_scope")
@@ -224,6 +234,9 @@ if page == "📋 总览":
         if c4.button("← 返回总览"): st.session_state.subpage = None; st.rerun()
     else:
         st.header("Sandbox 列表")
+        # ponytail: auto-refresh
+        if st.checkbox("🔄 自动刷新 (5s)", key="auto_refresh"):
+            time.sleep(5); st.rerun()
         if st.button("➕ 创建 Sandbox", use_container_width=True): st.session_state.subpage = "create"; st.rerun()
         if not sandboxes: st.info("暂无 sandbox")
         else:
