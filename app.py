@@ -264,7 +264,6 @@ if page == "📋 总览":
         filter_val = f1.selectbox("状态筛选", ["", "Running", "Pending", "Paused", "Terminated", "Failed"],
                                   format_func=lambda x: f"📋 {x}" if x else "📋 全部",
                                   key="sb_filter")
-        st.session_state.sb_filter = filter_val
         if not sandboxes: st.info("点击下方「➕ 创建 Sandbox」添加第一个" if not filter_val else "没有匹配的沙箱")
         else:
             cols = st.columns([3,2,2,1])
