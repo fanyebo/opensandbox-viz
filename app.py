@@ -217,11 +217,12 @@ if page == "📋 总览":
     if sp and sp.startswith("detail:"):
         sid = sp.split(":",1)[1]
         st.header("Sandbox 详情")
-        st.caption(f"ID: `{sid[:16]}...`")
+        st.caption(f"总览 > 详情 · `{sid[:16]}...`")
         if st.button("← 返回总览"): st.session_state.subpage = None; st.rerun()
         show_detail(sid)
     elif sp == "create":
         st.header("创建 Sandbox")
+        st.caption("总览 > 创建")
         image = st.text_input("镜像", value="agentscope/runtime-sandbox-icbc_skill_scope:latest")
         timeout = st.number_input("超时(秒)", value=300, min_value=10)
         c1,c2 = st.columns(2)
@@ -253,7 +254,7 @@ if page == "📋 总览":
         if st.checkbox("🔄 自动刷新 (5s)", key="auto_refresh"):
             time.sleep(5); st.rerun()
         if st.button("➕ 创建 Sandbox", use_container_width=True): st.session_state.subpage = "create"; st.rerun()
-        if not sandboxes: st.info("暂无 sandbox")
+        if not sandboxes: st.info("点击下方「➕ 创建 Sandbox」添加第一个")
         else:
             cols = st.columns([3,2,2,1])
             for h,c in zip(["ID","状态","镜像","操作"],cols): c.caption(f"**{h}**")
