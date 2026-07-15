@@ -25,6 +25,7 @@ if "subpage" not in st.session_state: st.session_state.subpage = None
 # ponytail: pagination state
 if "sb_page" not in st.session_state: st.session_state.sb_page = 1
 if "sb_size" not in st.session_state: st.session_state.sb_size = 20
+if "sb_filter" not in st.session_state: st.session_state.sb_filter = ""
 
 def _key(): return st.session_state.osb_key
 def _base(): return (st.session_state.osb_base or BASE).rstrip("/")  # ponytail: guard empty config
@@ -45,9 +46,11 @@ def execd(sid, port, method, path, **kw):
     if not base.startswith("http"): base = f"http://{base}"
     return _client.request(method, f"{base.rstrip('/')}{path}", headers=h, **kw)
 
-def fetch(page=1, size=20):
+def fetch(page=1, size=20, state=""):
     """Return (items, pagination_dict)."""
-    r = api(f"/sandboxes?page={page}&pageSize={size}")
+    q = f"/sandboxes?page={page}&pageSize={size}"
+    if state: q += f"&state={state}"
+    r = api(q)
     if r.status_code != 200: return [], {}
     d = r.json()
     items = d if isinstance(d, list) else d.get("items", [])
@@ -77,7 +80,7 @@ page = st.sidebar.radio("导航", ["📋 总览", "⚙️ 配置"], label_visibi
 if "page_prev" not in st.session_state: st.session_state.page_prev = page
 if page != st.session_state.page_prev: st.session_state.subpage = None
 st.session_state.page_prev = page
-sandboxes, pagination = fetch(st.session_state.sb_page, st.session_state.sb_size)
+sandboxes, pagination = fetch(st.session_state.sb_page, st.session_state.sb_size, st.session_state.sb_filter)
 
 def show_detail(sid):
     r = api(f"/sandboxes/{sid}")
@@ -178,12 +181,14 @@ def show_detail(sid):
                 sn_id = sn.get("originalSandboxId") or sn.get("sandboxId") or ""
                 if sn_id and sn_id != sid: continue
                 sn_full = sn.get("snapshotId") or sn.get("id", "?")
-                c1,c2 = st.columns([4,1])
+                c1,c2,c3 = st.columns([3,1,1])
                 c1.caption(f"{sn_full[:20]}... ({sn.get('status','?')})")
                 if c2.button("♻️ 恢复", key=f"snap_restore_{sn_full[:12]}"):
                     r2 = api("/sandboxes", "POST", json={"snapshotId": sn_full})
                     if r2.status_code in (200,201,202): st.toast("已从快照创建沙箱"); st.rerun()
                     else: st.error(f"恢复失败: {r2.text[:200]}")
+                if c3.button("🗑️", key=f"snap_del_{sn_full[:12]}"):
+                    api(f"/snapshots/{sn_full}", "DELETE"); st.toast("已删除"); st.rerun()
         else: st.caption("无法获取快照列表")
     with st.expander("🔧 进程管理"):
         if st.button("📋 列出进程", key=f"ps_{sid}"):
@@ -254,7 +259,13 @@ if page == "📋 总览":
         if st.checkbox("🔄 自动刷新 (5s)", key="auto_refresh"):
             time.sleep(5); st.rerun()
         if st.button("➕ 创建 Sandbox", use_container_width=True): st.session_state.subpage = "create"; st.rerun()
-        if not sandboxes: st.info("点击下方「➕ 创建 Sandbox」添加第一个")
+        # ponytail: state filter
+        f1,f2 = st.columns([3,1])
+        filter_val = f1.selectbox("状态筛选", ["", "Running", "Pending", "Paused", "Terminated", "Failed"],
+                                  format_func=lambda x: f"📋 {x}" if x else "📋 全部",
+                                  key="sb_filter")
+        st.session_state.sb_filter = filter_val
+        if not sandboxes: st.info("点击下方「➕ 创建 Sandbox」添加第一个" if not filter_val else "没有匹配的沙箱")
         else:
             cols = st.columns([3,2,2,1])
             for h,c in zip(["ID","状态","镜像","操作"],cols): c.caption(f"**{h}**")
