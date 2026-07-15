@@ -1,5 +1,5 @@
 """OpenSandbox Dashboard"""
-import streamlit as st, httpx, os, time, base64, json
+import streamlit as st, httpx, os, time, base64, json, uuid
 
 st.set_page_config(page_title="OpenSandbox Viz", page_icon="📦", layout="wide")
 
@@ -26,6 +26,7 @@ if "subpage" not in st.session_state: st.session_state.subpage = None
 if "sb_page" not in st.session_state: st.session_state.sb_page = 1
 if "sb_size" not in st.session_state: st.session_state.sb_size = 20
 if "sb_filter" not in st.session_state: st.session_state.sb_filter = ""
+if "sb_mname" not in st.session_state: st.session_state.sb_mname = ""
 
 def _key(): return st.session_state.osb_key
 def _base(): return (st.session_state.osb_base or BASE).rstrip("/")  # ponytail: guard empty config
@@ -234,11 +235,14 @@ if page == "📋 总览":
         cpu = c1.text_input("CPU", value="1")
         mem = c2.text_input("内存", value="512Mi")
         ep = st.text_input("Entrypoint", value="sleep infinity")
+        # ponytail: metadata name for filtering
+        meta_name = st.text_input("Metadata Name", value=uuid.uuid4().hex[:8], key="meta_name")
         # ponytail: env vars
         env_raw = st.text_area("环境变量", placeholder="KEY1=val1\nKEY2=val2", height=80)
         c3,c4 = st.columns(2)
         if c3.button("创建", type="primary"):
             body = {"image":{"uri":image},"timeout":timeout,"entrypoint":ep.split()}
+            if meta_name: body["metadata"] = {"name": meta_name}  # ponytail: for filtering
             if st.session_state.osb_proxy: body["useProxy"] = True
             if cpu or mem: body["resourceLimits"] = {"cpu":cpu,"memory":mem}
             # ponytail: parse env
@@ -264,6 +268,11 @@ if page == "📋 总览":
         filter_val = f1.selectbox("状态筛选", ["", "Running", "Pending", "Paused", "Terminated", "Failed"],
                                   format_func=lambda x: f"📋 {x}" if x else "📋 全部",
                                   key="sb_filter")
+        f2.text_input("Metadata Name", key="sb_mname", placeholder="按名称过滤")
+        # ponytail: client-side metadata.name filter (API does not support it)
+        mname = st.session_state.sb_mname
+        if mname:
+            sandboxes = [s for s in sandboxes if ((s.get("metadata") or {}).get("name") or "").find(mname) >= 0]
         if not sandboxes: st.info("点击下方「➕ 创建 Sandbox」添加第一个" if not filter_val else "没有匹配的沙箱")
         else:
             cols = st.columns([3,2,2,1])
